@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phish Hunter AI | Real-Time Protection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg: #000000;
+            --card: #0a0a0a;
+            --border: #222222;
+            --text: #ffffff;
+            --accent: #ffffff;
+            --high: #ff3b3b;
+            --medium: #ffcc00;
+            --low: #33ff00;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+            overflow-x: hidden;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Grid Background Effect */
+        #grid-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.2;
+        }
+
+        .glass {
+            background: rgba(10, 10, 10, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+        }
+
+        .btn-premium {
+            background: var(--accent);
+            color: var(--bg);
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+            border: 1px solid var(--accent);
+        }
+
+        .btn-premium:hover {
+            background: transparent;
+            color: var(--accent);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        }
+
+        .input-premium {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            color: white;
+            transition: border-color 0.3s;
+        }
+
+        .input-premium:focus {
+            border-color: var(--accent);
+            outline: none;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tab-active {
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+        }
+
+        .risk-gauge {
+            width: 180px;
+            height: 180px;
+            transform: rotate(-90deg);
+        }
+
+        .risk-circle {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        @keyframes scan-line {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        .scan-line {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+            z-index: 100;
+            pointer-events: none;
+            animation: scan-line 4s linear infinite;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <canvas id="grid-canvas"></canvas>
+    <div class="scan-line"></div>
+
+    <!-- Layout Container -->
+    <div class="max-w-7xl mx-auto px-6 py-8 relative">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-12">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-white flex items-center justify-center rounded-sm">
+                    <i data-lucide="shield-check" class="text-black w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tighter uppercase">Phish Hunter <span class="font-normal opacity-50">AI</span></h1>
+                    <p class="text-xs opacity-50 mono uppercase tracking-widest">Advanced Threat Intelligence</p>
+                </div>
+            </div>
+            <nav class="flex gap-8 text-sm font-medium opacity-60">
+                <button onclick="switchTab('scanner')" id="tab-scanner" class="hover:opacity-100 transition-opacity tab-active py-2">SCANNER</button>
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="hover:opacity-100 transition-opacity py-2">DASHBOARD</button>
+                <button onclick="switchTab('admin')" id="tab-admin" class="hover:opacity-100 transition-opacity py-2">ADMIN</button>
+            </nav>
+        </header>
+
+        <!-- Main Content (Scanner) -->
+        <main id="section-scanner" class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <!-- Left Side: Inputs -->
+            <div class="lg:col-span-7 space-y-8">
+                <div class="glass p-8 rounded-xl">
+                    <div class="flex gap-4 mb-8">
+                        <button onclick="setScanMode('email')" id="mode-email" class="px-4 py-2 border border-white bg-white text-black text-sm font-bold rounded">EMAIL</button>
+                        <button onclick="setScanMode('sms')" id="mode-sms" class="px-4 py-2 border border-white/20 text-white/50 text-sm font-bold rounded">SMS</button>
+                        <button onclick="setScanMode('url')" id="mode-url" class="px-4 py-2 border border-white/20 text-white/50 text-sm font-bold rounded">URL</button>
+                    </div>
+
+                    <!-- Email Inputs -->
+                    <div id="input-container-email" class="space-y-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] mono opacity-40 uppercase">Sender Address</label>
+                            <input type="text" id="email-sender" placeholder="support@paypa1.co" class="w-full p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] mono opacity-40 uppercase">Subject Line</label>
+                            <input type="text" id="email-subject" placeholder="Urgent: Action Required" class="w-full p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] mono opacity-40 uppercase">Email Content</label>
+                            <textarea id="email-body" rows="6" placeholder="Paste full email body here..." class="w-full p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all resize-none"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- SMS Inputs -->
+                    <div id="input-container-sms" class="space-y-4 hidden">
+                        <div class="space-y-1">
+                            <label class="text-[10px] mono opacity-40 uppercase">Message Text</label>
+                            <textarea id="sms-message" rows="6" placeholder="Enter SMS message..." class="w-full p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all resize-none"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- URL Inputs -->
+                    <div id="input-container-url" class="space-y-4 hidden">
+                        <div class="space-y-1">
+                            <label class="text-[10px] mono opacity-40 uppercase">Suspicious URL</label>
+                            <input type="text" id="url-input" placeholder="http://secure-login-wellsfargo.xyz" class="w-full p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all">
+                        </div>
+                    </div>
+
+                    <button onclick="performScan()" class="w-full mt-8 p-4 font-bold bg-white text-black hover:bg-white/90 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="zap" class="w-4 h-4 fill-black"></i> ANALYZE THREAT
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Side: Results -->
+            <div class="lg:col-span-5 space-y-6">
+                <!-- Result Card -->
+                <div id="result-placeholder" class="glass h-[500px] rounded-xl flex flex-col items-center justify-center p-12 text-center opacity-30 border-dashed">
+                    <i data-lucide="radar" class="w-12 h-12 mb-4"></i>
+                    <p class="mono text-sm uppercase tracking-tighter">Waiting for scan bypass...</p>
+                </div>
+
+                <div id="result-actual" class="glass rounded-xl p-8 hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div class="flex justify-between items-start mb-8">
+                        <div>
+                            <span id="risk-badge" class="px-2 py-1 text-[10px] mono font-bold rounded uppercase">LEVEL: HIGH</span>
+                            <h2 class="text-3xl font-bold mt-2">Threat Analysis</h2>
+                        </div>
+                        <div class="relative flex items-center justify-center">
+                            <svg class="risk-gauge">
+                                <circle class="risk-circle-bg" cx="90" cy="90" r="80" stroke="#111" fill="none" stroke-width="8"></circle>
+                                <circle id="risk-path" class="risk-circle" cx="90" cy="90" r="80" stroke="#fff" fill="none" stroke-dasharray="502" stroke-dashoffset="502"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span id="risk-score" class="text-4xl font-bold">0</span>
+                                <span class="text-[8px] mono opacity-40">SCORE</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-xs mono uppercase opacity-40 mb-3 tracking-widest">AI Reasoning (Flags)</h3>
+                            <ul id="flag-list" class="space-y-3">
+                                <!-- Flags go here -->
+                            </ul>
+                        </div>
+
+                        <div class="pt-6 border-t border-white/10">
+                            <h3 class="text-xs mono uppercase opacity-40 mb-3 tracking-widest text-[#33ff00]">Safe Counter-Action</h3>
+                            <p id="safe-suggestion" class="text-sm opacity-80 leading-relaxed italic">
+                                Do not interact with this message. Reported as high probability fraud.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Dashboard Section -->
+        <main id="section-dashboard" class="hidden animate-in fade-in duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                <div class="glass p-6 rounded-xl">
+                    <p class="text-[10px] mono opacity-40 uppercase mb-1">Total Scans</p>
+                    <h3 id="stat-total" class="text-4xl font-bold">0</h3>
+                </div>
+                <div class="glass p-6 rounded-xl">
+                    <p class="text-[10px] mono opacity-40 uppercase mb-1">Threats Blocked</p>
+                    <h3 id="stat-threats" class="text-4xl font-bold">0</h3>
+                </div>
+                <div class="glass p-6 rounded-xl">
+                    <p class="text-[10px] mono opacity-40 uppercase mb-1">Safe Sessions</p>
+                    <h3 id="stat-safe" class="text-4xl font-bold">0</h3>
+                </div>
+                <div class="glass p-6 rounded-xl">
+                    <p class="text-[10px] mono opacity-40 uppercase mb-1">System Health</p>
+                    <h3 class="text-4xl font-bold text-[#33ff00]">100<span class="text-sm">%</span></h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                <div class="lg:col-span-8 glass rounded-xl overflow-hidden">
+                    <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                        <h3 class="font-bold uppercase tracking-tight">Recent Threat Intelligence</h3>
+                        <i data-lucide="refresh-cw" class="w-4 h-4 opacity-40 cursor-pointer hover:rotate-180 transition-all duration-700" onclick="refreshStats()"></i>
+                    </div>
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="mono text-[10px] opacity-40 border-b border-white/5">
+                                <th class="p-4 font-normal">TYPE</th>
+                                <th class="p-4 font-normal">INPUT</th>
+                                <th class="p-4 font-normal">RISK</th>
+                                <th class="p-4 font-normal text-right">SCORE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-scans-table">
+                            <!-- Rows go here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="lg:col-span-4 glass rounded-xl p-6">
+                    <h3 class="font-bold uppercase tracking-tight mb-6">Threat Vectors</h3>
+                    <div class="space-y-6" id="vector-bars">
+                        <!-- Bars go here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Admin Section -->
+        <main id="section-admin" class="hidden animate-in fade-in duration-500">
+            <div class="max-w-2xl mx-auto glass p-8 rounded-xl">
+                <h2 class="text-2xl font-bold mb-6">Admin Controls</h2>
+                <div class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="text-[10px] mono opacity-40 uppercase">Add Domain to Global Blocklist</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="admin-block-input" placeholder="MaliciousDomain.com" class="flex-1 p-4 rounded bg-white/5 border border-white/10 focus:border-white outline-none transition-all">
+                            <button onclick="addToBlocklist()" class="px-6 bg-white text-black font-bold uppercase text-xs">BLOCK</button>
+                        </div>
+                    </div>
+                    
+                    <div class="pt-8 border-t border-white/10">
+                        <h3 class="text-xs mono uppercase opacity-40 mb-4">Model Retraining</h3>
+                        <div class="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded">
+                            <i data-lucide="cpu" class="w-5 h-5 opacity-40"></i>
+                            <div class="flex-1">
+                                <p class="text-xs font-bold uppercase">Heuristic v4.2</p>
+                                <p class="text-[10px] opacity-40">Last updated: 2024-03-24</p>
+                            </div>
+                            <button class="px-3 py-1 border border-white/20 text-[10px] font-bold uppercase">RE-INDEX</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        lucide.createIcons();
+
+        // Background Grid
+        const canvas = document.getElementById('grid-canvas');
+        const ctx = canvas.getContext('2d');
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.onresize = resize;
+        resize();
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 0.5;
+            const size = 60;
+            for (let x = 0; x < canvas.width; x += size) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += size) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+        drawGrid();
+
+        // State
+        let currentMode = 'email';
+
+        function switchTab(tab) {
+            ['scanner', 'dashboard', 'admin'].forEach(t => {
+                document.getElementById('section-' + t).classList.add('hidden');
+                document.getElementById('tab-' + t).classList.remove('tab-active');
+            });
+            document.getElementById('section-' + tab).classList.remove('hidden');
+            document.getElementById('tab-' + tab).classList.add('tab-active');
+            
+            if (tab === 'dashboard') refreshStats();
+        }
+
+        function setScanMode(mode) {
+            currentMode = mode;
+            ['email', 'sms', 'url'].forEach(m => {
+                document.getElementById('input-container-' + m).classList.add('hidden');
+                document.getElementById('mode-' + m).classList.remove('bg-white', 'text-black');
+                document.getElementById('mode-' + m).classList.add('border-white/20', 'text-white/50');
+            });
+            document.getElementById('input-container-' + mode).classList.remove('hidden');
+            document.getElementById('mode-' + mode).classList.remove('border-white/20', 'text-white/50');
+            document.getElementById('mode-' + mode).classList.add('bg-white', 'text-black');
+        }
+
+        async function performScan() {
+            const btn = event.target.closest('button');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="animate-spin w-4 h-4"></i> ANALYZING...';
+
+            let endpoint = '';
+            let payload = {};
+
+            if (currentMode === 'email') {
+                endpoint = '/analyze-email';
+                payload = {
+                    sender: document.getElementById('email-sender').value,
+                    subject: document.getElementById('email-subject').value,
+                    body: document.getElementById('email-body').value
+                };
+            } else if (currentMode === 'sms') {
+                endpoint = '/analyze-sms';
+                payload = { message: document.getElementById('sms-message').value };
+            } else {
+                endpoint = '/check-url';
+                payload = { url: document.getElementById('url-input').value };
+            }
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                displayResults(data);
+            } catch (err) {
+                console.error(err);
+                alert('Scan failed. Ensure backend is running.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="zap" class="w-4 h-4 fill-black"></i> ANALYZE THREAT';
+                lucide.createIcons();
+            }
+        }
+
+        function displayResults(data) {
+            document.getElementById('result-placeholder').classList.add('hidden');
+            const resultActual = document.getElementById('result-actual');
+            resultActual.classList.remove('hidden');
+
+            // Score Animation
+            animateScore(data.score);
+
+            // Level Badge
+            const badge = document.getElementById('risk-badge');
+            badge.innerText = `LEVEL: ${data.risk}`;
+            badge.className = `px-2 py-1 text-[10px] mono font-bold rounded uppercase ${
+                data.risk === 'High' ? 'bg-[#ff3b3b] text-white' : 
+                data.risk === 'Medium' ? 'bg-[#ffcc00] text-black' : 'bg-[#33ff00] text-black'
+            }`;
+
+            // Gauge Color
+            const path = document.getElementById('risk-path');
+            path.style.stroke = data.risk === 'High' ? '#ff3b3b' : data.risk === 'Medium' ? '#ffcc00' : '#33ff00';
+
+            // Flags
+            const list = document.getElementById('flag-list');
+            list.innerHTML = data.flags.map(f => `
+                <li class="flex gap-3 text-sm opacity-80 animate-in fade-in slide-in-from-left-2 duration-300">
+                    <i data-lucide="alert-triangle" class="w-4 h-4 text-white shrink-0"></i>
+                    ${f}
+                </li>
+            `).join('') || '<li class="text-sm opacity-50 italic">No suspicious indicators found.</li>';
+
+            // Suggestions
+            const suggestion = document.getElementById('safe-suggestion');
+            if (data.risk === 'High') {
+                suggestion.className = "text-sm opacity-80 leading-relaxed italic text-[#ff3b3b]";
+                suggestion.innerText = "CRITICAL: Do not interact. This message shows high-confidence phishing indicators. Delete and re-verify through official channels.";
+            } else if (data.risk === 'Medium') {
+                suggestion.className = "text-sm opacity-80 leading-relaxed italic text-[#ffcc00]";
+                suggestion.innerText = "CAUTION: Exercise care. This message contains suspicious elements. Verify the sender's identity before clicking any links.";
+            } else {
+                suggestion.className = "text-sm opacity-80 leading-relaxed italic text-[#33ff00]";
+                suggestion.innerText = "SAFE: No malicious patterns detected. Still, always maintain general security hygiene.";
+            }
+
+            lucide.createIcons();
+        }
+
+        function animateScore(target) {
+            const el = document.getElementById('risk-score');
+            const path = document.getElementById('risk-path');
+            const circumference = 502; // 2 * PI * 80
+            
+            let current = 0;
+            const duration = 1000;
+            const start = performance.now();
+
+            function update(time) {
+                const progress = Math.min((time - start) / duration, 1);
+                current = Math.floor(progress * target);
+                el.innerText = current;
+
+                // Adjust gauge path
+                const offset = circumference - (progress * target / 100) * circumference;
+                path.style.strokeDashoffset = offset;
+
+                if (progress < 1) requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        }
+
+        async function refreshStats() {
+            try {
+                const res = await fetch('/dashboard-stats');
+                const data = await res.json();
+                
+                document.getElementById('stat-total').innerText = data.stats.total_scans;
+                document.getElementById('stat-threats').innerText = data.stats.high_threats;
+                document.getElementById('stat-safe').innerText = data.stats.total_scans - data.stats.high_threats;
+
+                // Table
+                const table = document.getElementById('recent-scans-table');
+                table.innerHTML = data.stats.recent_scans.map(s => `
+                    <tr class="border-b border-white/5 hover:bg-white/5 transition-all">
+                        <td class="p-4 mono text-[10px]">${s.type}</td>
+                        <td class="p-4 text-xs opacity-60">${s.input}</td>
+                        <td class="p-4">
+                            <span class="text-[10px] font-bold ${s.risk === 'High' ? 'text-[#ff3b3b]' : s.risk === 'Medium' ? 'text-[#ffcc00]' : 'text-[#33ff00]'}">${s.risk}</span>
+                        </td>
+                        <td class="p-4 text-right mono text-xs">${s.score}</td>
+                    </tr>
+                `).join('');
+
+                // Vector Bars
+                const total = data.stats.total_scans || 1;
+                const dist = data.stats.type_distribution;
+                const vectors = ['Email', 'SMS', 'URL'];
+                document.getElementById('vector-bars').innerHTML = vectors.map(v => {
+                    const count = dist[v] || 0;
+                    const percent = Math.round((count / total) * 100);
+                    return `
+                        <div>
+                            <div class="flex justify-between text-[10px] mono uppercase mb-2">
+                                <span>${v} Analysis</span>
+                                <span>${percent}%</span>
+                            </div>
+                            <div class="w-full bg-white/10 h-1 rounded-full overflow-hidden">
+                                <div class="bg-white h-full transition-all duration-1000" style="width: ${percent}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function addToBlocklist() {
+            const input = document.getElementById('admin-block-input');
+            const domain = input.value;
+            if (!domain) return;
+
+            try {
+                const res = await fetch(`/admin/blocklist?domain=${domain}`, { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                input.value = '';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Init
+        refreshStats();
+    </script>
+</body>
+</html>
